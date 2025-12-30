@@ -1,0 +1,72 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "hf-to-rlds"
+version = "0.1.0"
+description = "Convert LeRobot (HuggingFace) datasets to RLDS (TFRecord) format"
+readme = "README.md"
+requires-python = ">=3.10"
+license = {text = "MIT"}
+authors = [
+    {name = "Your Name", email = "your.email@example.com"}
+]
+keywords = ["robotics", "dataset", "rlds", "lerobot", "huggingface", "tensorflow"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+
+dependencies = [
+    "tensorflow>=2.15.0",
+    "imageio[pyav]>=2.31.0",
+    "pandas>=2.0.0",
+    "numpy>=1.24.0",
+    "huggingface_hub>=0.20.0",
+    "datasets>=2.16.0",
+    "Pillow>=10.0.0",
+    "tqdm>=4.66.0",
+    "loguru>=0.7.0",
+]
+
+[project.optional-dependencies]
+so101 = [
+    "so101_ik_fk @ git+https://github.com/kartiksonu/so101_ik_fk.git",
+]
+dev = [
+    "pytest>=7.0.0",
+    "pytest-cov>=4.0.0",
+    "black>=23.0.0",
+    "ruff>=0.1.0",
+]
+
+[project.scripts]
+hf-to-rlds = "hf_to_rlds.scripts.convert:main"
+
+[project.urls]
+Homepage = "https://github.com/your-username/hf-to-rlds"
+Documentation = "https://github.com/your-username/hf-to-rlds#readme"
+Issues = "https://github.com/your-username/hf-to-rlds/issues"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["hf_to_rlds*"]
+
+[tool.setuptools.package-data]
+"*" = ["*.urdf", "*.json"]
+
+[tool.black]
+line-length = 100
+target-version = ["py310", "py311", "py312"]
+
+[tool.ruff]
+line-length = 100
+select = ["E", "F", "W", "I", "N"]
+ignore = ["E501"]
