@@ -208,6 +208,31 @@ class FKConverter:
 
         return xyz, rpy
 
+    def joint_to_eef_pose_with_rotation(self, joint_angles: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+        """
+        Convert joint angles to end-effector pose, returning rotation matrix.
+
+        Args:
+            joint_angles: Joint angles. Shape (num_arm_joints,) or larger
+                         (extra values like gripper are ignored for FK).
+
+        Returns:
+            Tuple of (xyz, R):
+                - xyz: Position [x, y, z] in meters
+                - R: 3x3 rotation matrix
+        """
+        # Take only arm joints, convert to float64 for placo compatibility
+        arm_joints = np.array(joint_angles[:self.num_arm_joints], dtype=np.float64)
+
+        # Compute FK
+        pose_matrix = self.fk.compute(arm_joints)
+
+        # Extract position and rotation matrix
+        xyz = pose_matrix[:3, 3]
+        R = pose_matrix[:3, :3]
+
+        return xyz, R
+
     def compute_episode_deltas(
         self,
         joint_sequence: np.ndarray,
@@ -232,11 +257,11 @@ class FKConverter:
         T = len(joint_sequence)
         actions = np.zeros((T, 7), dtype=np.float32)
 
-        # Compute EEF poses for all timesteps
+        # Compute EEF poses for all timesteps (with rotation matrices for proper SO(3) deltas)
         poses = []
         for t in range(T):
-            xyz, rpy = self.joint_to_eef_pose(joint_sequence[t])
-            poses.append((xyz, rpy))
+            xyz, R = self.joint_to_eef_pose_with_rotation(joint_sequence[t])
+            poses.append((xyz, R))
 
         # Process gripper
         if binarize_gripper:
@@ -253,17 +278,18 @@ class FKConverter:
         # First frame: zero deltas, current gripper
         actions[0, 6] = gripper_binary[0]
 
-        # Compute deltas for remaining frames
+        # Compute deltas for remaining frames using proper SO(3) relative rotation
         for t in range(1, T):
-            prev_xyz, prev_rpy = poses[t - 1]
-            curr_xyz, curr_rpy = poses[t]
+            prev_xyz, prev_R = poses[t - 1]
+            curr_xyz, curr_R = poses[t]
 
+            # Position delta (vectors subtract normally)
             delta_xyz = curr_xyz - prev_xyz
-            delta_rpy = np.array([
-                wrap_angle(curr_rpy[0] - prev_rpy[0]),
-                wrap_angle(curr_rpy[1] - prev_rpy[1]),
-                wrap_angle(curr_rpy[2] - prev_rpy[2])
-            ])
+
+            # Rotation delta in SO(3): R_delta = R_curr @ R_prev.T
+            # This is the rotation that transforms prev orientation to curr orientation
+            R_delta = curr_R @ prev_R.T
+            delta_rpy = rotation_matrix_to_euler(R_delta)
 
             actions[t, :3] = delta_xyz
             actions[t, 3:6] = delta_rpy
