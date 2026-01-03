@@ -4,10 +4,10 @@ Download and convert a HuggingFace LeRobot dataset to RLDS format.
 
 Usage:
     python scripts/download_and_convert.py --repo_id sapanostic/so101_offline_eval --output_dir ./output
-    
+
     # With specific number of cameras
     python scripts/download_and_convert.py --repo_id sapanostic/so101_offline_eval --num_images 3
-    
+
     # Limit episodes (for testing)
     python scripts/download_and_convert.py --repo_id sapanostic/so101_offline_eval --max_episodes 5
 """
@@ -28,24 +28,24 @@ from lib.converter import convert_lerobot_to_rlds
 def download_dataset(repo_id: str, local_dir: Path) -> Path:
     """
     Download dataset from HuggingFace Hub.
-    
+
     Args:
         repo_id: HuggingFace dataset repository ID (e.g., "sapanostic/so101_offline_eval")
         local_dir: Local directory to download to
-        
+
     Returns:
         Path to downloaded dataset
     """
     logger.info(f"Downloading dataset: {repo_id}")
     logger.info(f"Destination: {local_dir}")
-    
+
     dataset_path = snapshot_download(
         repo_id=repo_id,
         repo_type="dataset",
         local_dir=local_dir,
         local_dir_use_symlinks=False,
     )
-    
+
     logger.success(f"Download complete: {dataset_path}")
     return Path(dataset_path)
 
@@ -58,21 +58,21 @@ def main():
 Examples:
     # Download and convert full dataset
     python scripts/download_and_convert.py --repo_id sapanostic/so101_offline_eval
-    
+
     # Specify output directory
     python scripts/download_and_convert.py --repo_id sapanostic/so101_offline_eval --output_dir ./my_output
-    
+
     # Use 3 cameras
     python scripts/download_and_convert.py --repo_id sapanostic/so101_offline_eval --num_images 3
-    
+
     # Convert only first 5 episodes (for testing)
     python scripts/download_and_convert.py --repo_id sapanostic/so101_offline_eval --max_episodes 5
-    
+
     # Skip download if already downloaded
     python scripts/download_and_convert.py --repo_id sapanostic/so101_offline_eval --skip_download --local_dir ./data/so101
         """
     )
-    
+
     # Required
     parser.add_argument(
         "--repo_id",
@@ -80,7 +80,7 @@ Examples:
         default="sapanostic/so101_offline_eval",
         help="HuggingFace dataset repository ID"
     )
-    
+
     # Output
     parser.add_argument(
         "--output_dir",
@@ -94,7 +94,7 @@ Examples:
         default=None,
         help="Output filename (default: {repo_name}.tfrecord)"
     )
-    
+
     # Download options
     parser.add_argument(
         "--local_dir",
@@ -107,7 +107,7 @@ Examples:
         action="store_true",
         help="Skip download if dataset already exists locally"
     )
-    
+
     # Conversion options
     parser.add_argument(
         "--num_images",
@@ -137,32 +137,32 @@ Examples:
         default=["front", "top", "wrist"],
         help="Camera order for image slots (default: front top wrist)"
     )
-    
+
     args = parser.parse_args()
-    
+
     # Determine paths
     repo_name = args.repo_id.split("/")[-1]
-    
+
     if args.local_dir:
         local_dir = Path(args.local_dir)
     else:
         local_dir = Path("./data") / repo_name
-    
+
     output_dir = Path(args.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
-    
+
     if args.output_name:
         output_path = output_dir / args.output_name
     else:
         output_path = output_dir / f"{repo_name}.tfrecord"
-    
+
     # Download dataset
     if args.skip_download and local_dir.exists():
         logger.info(f"Skipping download, using existing: {local_dir}")
         dataset_path = local_dir
     else:
         dataset_path = download_dataset(args.repo_id, local_dir)
-    
+
     # Configure conversion
     config = ConversionConfig(
         hf_repo_id=args.repo_id,
@@ -173,7 +173,7 @@ Examples:
         image_size=tuple(args.image_size),
         max_episodes=args.max_episodes,
     )
-    
+
     # Run conversion
     logger.info("=" * 60)
     logger.info("Starting conversion")
@@ -185,9 +185,9 @@ Examples:
     if args.max_episodes:
         logger.info(f"  Max episodes: {args.max_episodes}")
     logger.info("=" * 60)
-    
+
     convert_lerobot_to_rlds(config)
-    
+
     logger.success("=" * 60)
     logger.success("Conversion complete!")
     logger.success(f"Output: {output_path}")
@@ -196,4 +196,3 @@ Examples:
 
 if __name__ == "__main__":
     main()
-
