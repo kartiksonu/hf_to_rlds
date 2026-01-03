@@ -36,7 +36,7 @@ class ConversionConfig:
     # Image configuration
     num_images: int = 1
     camera_order: List[str] = field(default_factory=lambda: ["front", "top", "wrist"])
-    image_size: tuple = (224, 224)
+    image_size: tuple = (256, 256)
 
     # Episode limits
     max_episodes: Optional[int] = None
@@ -47,6 +47,9 @@ class ConversionConfig:
 
     # Source dataset info
     fps: int = 15
+
+    # Downsampling configuration
+    target_fps: Optional[float] = None  # Target fps after downsampling. None = no downsampling.
 
     # Robot/FK configuration
     urdf_path: Optional[str] = None

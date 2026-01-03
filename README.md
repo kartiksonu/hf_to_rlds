@@ -267,7 +267,18 @@ Most Open X-Embodiment datasets (Bridge, RT-1, DROID, etc.) store actions as **e
 However, LeRobot stores **joint positions** (the raw motor angles). To convert:
 
 1. **Forward Kinematics (FK)**: Given joint angles + robot URDF, compute the EEF pose (4x4 transform matrix)
-2. **Delta computation**: `action[t] = pose[t] - pose[t-1]`
+2. **Delta computation in SE(3)**: Proper rotation deltas using `R_delta = R_curr @ R_prev.T`
+
+**Important**: Rotation deltas are computed in SO(3) space (relative rotation matrices), NOT by subtracting Euler angles. Euler angle subtraction is mathematically invalid for rotation deltas.
+
+```python
+# Position delta (vectors subtract normally)
+delta_xyz = curr_xyz - prev_xyz
+
+# Rotation delta in SO(3): R_delta transforms prev orientation to curr
+R_delta = R_curr @ R_prev.T
+delta_rpy = rotation_matrix_to_euler(R_delta)
+```
 
 **What is placo?** A C++ robotics library (with Python bindings) for kinematics. Given a URDF robot model and joint angles, it computes the 4x4 transformation matrix of any link in the kinematic chain.
 
@@ -286,6 +297,40 @@ LeRobot stores gripper as continuous angle (e.g., 0-50 degrees).
 RLDS convention uses binary: 0 = closed, 1 = open.
 
 **Solution**: Auto-compute threshold as midpoint of observed range, then binarize.
+
+### 5. Downsampling for VLA Training
+
+LeRobot data is typically recorded at **15 fps** with small per-frame deltas (~0.003m).
+Most VLA models (X-VLA, OpenVLA) were trained on Bridge data at **~3 fps** with larger deltas (~0.015m).
+
+**Solution**: Downsample to match target fps. When downsampling, action deltas are automatically recomputed between downsampled frames:
+
+```
+Original 15fps:
+  S0 --0.003m--> S1 --0.003m--> ... --0.003m--> S7
+
+After downsampling (target_fps=2):
+  S0 -------------------- 0.021m --------------------> S7
+                      action = S7 - S0
+```
+
+```python
+config = ConversionConfig(
+    target_fps=2.0,  # Downsample from 15fps to ~2Hz
+    ...
+)
+```
+
+### 6. Image Size Configuration
+
+Configure output image size to match your model's expected input:
+
+```python
+config = ConversionConfig(
+    image_size=(256, 256),  # Match Bridge dataset (default: 224x224)
+    ...
+)
+```
 
 ---
 
@@ -329,6 +374,32 @@ pip install -e ".[so101]"
 ```
 
 Then just use the default config - no extra setup needed.
+
+### Python API Example
+
+```python
+from lib.config import ConversionConfig
+from lib.converter import convert_lerobot_to_rlds
+
+config = ConversionConfig(
+    hf_repo_id='sapanostic/so101_offline_eval',
+    output_path='./output.tfrecord',
+    local_data_dir='./data/so101_offline_eval',
+    
+    # Camera configuration
+    num_images=1,
+    camera_order=['top'],           # Use top camera
+    image_size=(256, 256),          # Match Bridge dataset
+    
+    # Downsampling (15fps -> ~2fps)
+    target_fps=2.0,
+    
+    # Episode limits
+    max_episodes=10,
+)
+
+convert_lerobot_to_rlds(config)
+```
 
 ### Option 1: Custom URDF (if your FK module is similar to SO101)
 

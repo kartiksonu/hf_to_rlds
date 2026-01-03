@@ -68,6 +68,15 @@ def convert_lerobot_to_rlds(config: ConversionConfig, verbose: bool = True) -> i
     logger.info(f"Num Images: {config.num_images}")
     logger.info(f"Image Size: {config.image_size}")
 
+    # Compute downsampling parameters
+    skip_frames = 1
+    if config.target_fps is not None and config.target_fps < config.fps:
+        skip_frames = int(round(config.fps / config.target_fps))
+        effective_fps = config.fps / skip_frames
+        logger.info(f"Downsampling: {config.fps} Hz -> {effective_fps:.2f} Hz (skip={skip_frames})")
+    elif config.target_fps is not None:
+        logger.warning(f"target_fps ({config.target_fps}) >= source fps ({config.fps}), no downsampling")
+
     # Ensure output directory exists
     config.output_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -152,6 +161,12 @@ def convert_lerobot_to_rlds(config: ConversionConfig, verbose: bool = True) -> i
 
             instruction = task_map.get(task_idx, "perform the task")
 
+            # Apply downsampling if configured
+            if skip_frames > 1:
+                joint_sequence = joint_sequence[::skip_frames]
+                gripper_sequence = gripper_sequence[::skip_frames]
+                T = len(joint_sequence)  # Update T for downsampled length
+
             actions = fk_converter.compute_episode_deltas(
                 joint_sequence,
                 gripper_sequence,
@@ -170,7 +185,12 @@ def convert_lerobot_to_rlds(config: ConversionConfig, verbose: bool = True) -> i
             for img_slot in range(config.num_images):
                 if img_slot < len(config.camera_order):
                     camera = config.camera_order[img_slot]
-                    images[img_slot] = video_loader.extract_frames(int(ep_idx), camera, T)
+                    # Extract all frames first, then downsample
+                    all_frames = video_loader.extract_frames(int(ep_idx), camera, len(frame_order))
+                    if skip_frames > 1:
+                        images[img_slot] = all_frames[::skip_frames][:T]  # Downsample and match T
+                    else:
+                        images[img_slot] = all_frames[:T]
                 else:
                     images[img_slot] = video_loader._generate_black_frames(T)
 
