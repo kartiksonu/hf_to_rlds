@@ -385,15 +385,15 @@ config = ConversionConfig(
     hf_repo_id='sapanostic/so101_offline_eval',
     output_path='./output.tfrecord',
     local_data_dir='./data/so101_offline_eval',
-    
+
     # Camera configuration
     num_images=1,
     camera_order=['top'],           # Use top camera
     image_size=(256, 256),          # Match Bridge dataset
-    
+
     # Downsampling (15fps -> ~2fps)
     target_fps=2.0,
-    
+
     # Episode limits
     max_episodes=10,
 )

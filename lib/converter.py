@@ -82,9 +82,21 @@ def convert_lerobot_to_rlds(config: ConversionConfig, verbose: bool = True) -> i
 
     # 1. Load HuggingFace dataset
     logger.info("[1/5] Loading HuggingFace dataset...")
-    dataset = load_dataset(config.hf_repo_id, split="train")
 
-    episode_indices = np.array(dataset["episode_index"])
+    use_local_parquet = False
+    if config.local_data_dir:
+        # Load from local parquet files
+        from pathlib import Path
+        parquet_dir = Path(config.local_data_dir) / "data"
+        parquet_files = sorted(parquet_dir.glob("**/*.parquet"))
+        logger.info(f"  Loading from {len(parquet_files)} local parquet files...")
+        df_list = [pd.read_parquet(f) for f in parquet_files]
+        dataset = pd.concat(df_list, ignore_index=True)
+        episode_indices = dataset["episode_index"].values
+        use_local_parquet = True
+    else:
+        dataset = load_dataset(config.hf_repo_id, split="train")
+        episode_indices = np.array(dataset["episode_index"])
     unique_episodes = np.unique(episode_indices)
 
     if config.max_episodes is not None:
@@ -134,9 +146,14 @@ def convert_lerobot_to_rlds(config: ConversionConfig, verbose: bool = True) -> i
         all_gripper = []
         for idx in unique_episodes[:min(10, len(unique_episodes))]:
             mask = episode_indices == idx
-            subset = dataset.select(np.where(mask)[0])
-            for row in subset:
-                all_gripper.append(row["observation.state"][gripper_idx])
+            if use_local_parquet:
+                subset = dataset[mask]
+                for _, row in subset.iterrows():
+                    all_gripper.append(row["observation.state"][gripper_idx])
+            else:
+                subset = dataset.select(np.where(mask)[0])
+                for row in subset:
+                    all_gripper.append(row["observation.state"][gripper_idx])
         gripper_threshold = (min(all_gripper) + max(all_gripper)) / 2
         logger.info(f"  Auto-computed gripper threshold: {gripper_threshold:.2f}")
 
@@ -144,9 +161,14 @@ def convert_lerobot_to_rlds(config: ConversionConfig, verbose: bool = True) -> i
         iterator = tqdm(unique_episodes, desc="Converting") if verbose else unique_episodes
         for ep_idx in iterator:
             mask = episode_indices == ep_idx
-            frame_indices = np.where(mask)[0]
-            subset = dataset.select(frame_indices)
-            frame_order = np.argsort(subset["frame_index"])
+
+            if use_local_parquet:
+                subset = dataset[mask].reset_index(drop=True)
+                frame_order = np.argsort(subset["frame_index"].values)
+            else:
+                frame_indices = np.where(mask)[0]
+                subset = dataset.select(frame_indices)
+                frame_order = np.argsort(subset["frame_index"])
 
             T = len(frame_order)
             joint_sequence = np.zeros((T, 6), dtype=np.float32)
@@ -154,10 +176,16 @@ def convert_lerobot_to_rlds(config: ConversionConfig, verbose: bool = True) -> i
             task_idx = 0
 
             for i, order_idx in enumerate(frame_order):
-                row = subset[int(order_idx)]
-                joint_sequence[i] = row["observation.state"]
-                gripper_sequence[i] = row["observation.state"][gripper_idx]
-                task_idx = row["task_index"]
+                if use_local_parquet:
+                    row = subset.iloc[int(order_idx)]
+                    joint_sequence[i] = np.array(row["observation.state"])
+                    gripper_sequence[i] = row["observation.state"][gripper_idx]
+                    task_idx = int(row["task_index"])
+                else:
+                    row = subset[int(order_idx)]
+                    joint_sequence[i] = row["observation.state"]
+                    gripper_sequence[i] = row["observation.state"][gripper_idx]
+                    task_idx = row["task_index"]
 
             instruction = task_map.get(task_idx, "perform the task")
 

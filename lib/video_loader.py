@@ -35,6 +35,8 @@ class VideoLoader:
         "front": "observation.images.front",
         "top": "observation.images.top",
         "wrist": "observation.images.wrist",
+        "ego": "observation.images.ego",
+        "realsense": "observation.images.realsense",
     }
 
     def __init__(
